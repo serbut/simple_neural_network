@@ -1,5 +1,5 @@
 import tensorflow as tf
-import argparse
+import tempfile
 import sys
 import numpy as np
 from random import randint
@@ -95,38 +95,101 @@ def bias_variable(shape):
 
 def main(_):
 
-    x = tf.placeholder(tf.float32, [None, 784])
+    # load MNIST data
+    mnist = input_data.read_data_sets('MNIST_data/', one_hot=True)
 
+    x = tf.placeholder(tf.float32, [None, 784])
+    y_ = tf.placeholder(tf.float32, [None, 10])
     y_conv, keep_prob = deepnn(x)
 
+    # restore session
+    sess = read_model()
+    tf.global_variables_initializer()
+
+    # recognize_random(mnist, sess, y_conv, x, keep_prob)
+
+    # test_accuracy(mnist, sess, y_conv, x, y_, keep_prob)
+
+    recognize_user_input(sess, y_conv, x, keep_prob)
+
+
+def recognize_random(mnist, sess, y_conv, x, keep_prob):
+    num = randint(0, mnist.test.images.shape[0])
+    img = mnist.test.images[num]
+
+    plt.imshow(img.reshape(28, 28), cmap=plt.cm.binary)
+    plt.show()
+
+    classification = sess.run(tf.argmax(y_conv, 1), feed_dict={x: [img], keep_prob: 1.0})
+    print("Your digit is: ", classification[0])
+
+
+def train(mnist, y_conv, y_, x, keep_prob):
+    with tf.name_scope('loss'):
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=y_,
+                                                                logits=y_conv)
+    cross_entropy = tf.reduce_mean(cross_entropy)
+
+    with tf.name_scope('adam_optimizer'):
+        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+
+    with tf.name_scope('accuracy'):
+        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
+        correct_prediction = tf.cast(correct_prediction, tf.float32)
+    accuracy = tf.reduce_mean(correct_prediction)
+
+    graph_location = tempfile.mkdtemp()
+    print('Saving graph to: %s' % graph_location)
+    train_writer = tf.summary.FileWriter(graph_location)
+    train_writer.add_graph(tf.get_default_graph())
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for i in range(20000):
+            batch = mnist.train.next_batch(50)
+            if i % 100 == 0:
+                train_accuracy = accuracy.eval(feed_dict={
+                    x: batch[0], y_: batch[1], keep_prob: 1.0})
+                print('step %d, training accuracy %g' % (i, train_accuracy))
+            train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+        test_accuracy(mnist, sess, y_conv, x, y_, keep_prob)
+        save_model(sess)
+
+
+def save_model(sess):
+    saver = tf.train.Saver()
+    save_path = saver.save(sess, './models/mnist_deep.ckpt')
+    print("Model successfully saved. Path: %s" % save_path)
+
+
+def read_model():
     saver = tf.train.Saver()
     sess = tf.Session()
     saver.restore(sess, './models/mnist_deep.ckpt')
-    tf.global_variables_initializer()
+    return sess
 
-    # mnist = input_data.read_data_sets('MNIST_data/', one_hot=True)
-    # num = randint(0, mnist.test.images.shape[0])
-    # img = mnist.test.images[num]
-    #
-    # plt.imshow(img.reshape(28, 28), cmap=plt.cm.binary)
-    # plt.show()
-    #
-    # classification = sess.run(tf.argmax(y_conv, 1), feed_dict={x: [img], keep_prob: 1.0})
-    # print(classification[0])
+
+def test_accuracy(mnist, sess, y_conv, x, y_, keep_prob):
+    with tf.name_scope('accuracy'):
+        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
+        correct_prediction = tf.cast(correct_prediction, tf.float32)
+    accuracy = tf.reduce_mean(correct_prediction)
+    with sess.as_default():
+        print('test accuracy %g' % accuracy.eval(feed_dict={
+            x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+
+
+def recognize_user_input(sess, y_conv, x, keep_prob):
 
     def classify(data):
-        # plt.imshow(data.reshape(28, 28), cmap=plt.cm.binary)
-        # plt.show()
         data = np.array(data).flatten()
         classification = sess.run(tf.argmax(y_conv, 1), feed_dict={x: [data], keep_prob: 1.0})
         print("Your digit is: ", classification[0])
+        plt.imshow(data.reshape(28, 28), cmap=plt.cm.binary)
+        plt.show()
 
     Matrix(classify)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--image', type=str, default='figure_1.png',
-                        help='Path to test image file')
-    FLAGS, unparsed = parser.parse_known_args()
-    tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+    tf.app.run(main=main, argv=sys.argv)

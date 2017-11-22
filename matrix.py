@@ -40,20 +40,20 @@ class Matrix():
         self.callback(self.matrix)
 
     def add_matrix_value(self, x, y, value):
-        if value <= 0:
+        if value <= 0 or x >= MATRIX_SIZE or y >= MATRIX_SIZE or y < 0 or x < 0:
             return
         self.matrix[x][y] += value
         if self.matrix[x][y] > 1:
             self.matrix[x][y] = 1
 
-    def add_point(self, x, y):
+    def add_point(self, x, y, value):
         X = int(x)
         Y = int(y)
         self.add_matrix_value(Y, X, 0.7)
-        self.add_matrix_value(Y, X + 1, 0.1)
-        self.add_matrix_value(Y, X - 1, 0.1)
-        self.add_matrix_value(Y + 1, X, 0.1)
-        self.add_matrix_value(Y - 1, X, 0.1)
+        self.add_matrix_value(Y, X + 1, 0.2)
+        self.add_matrix_value(Y, X - 1, 0.2)
+        self.add_matrix_value(Y + 1, X, 0.2)
+        self.add_matrix_value(Y - 1, X, 0.2)
 
         self.canvas.create_oval(
             x * CELL_SIZE,
@@ -64,4 +64,5 @@ class Matrix():
         )
 
     def motion(self, event):
-        self.add_point(event.x / CELL_SIZE, event.y / CELL_SIZE)
+        self.add_point(event.x / CELL_SIZE, event.y / CELL_SIZE, 0.7)
+
